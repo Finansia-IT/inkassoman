@@ -4,8 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Inkasso-Man</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,32 +26,20 @@
   <div id="root"></div>
 
   <script>
-    // Storage shim using localStorage
     window.storage = {
-      get: function(k, s) {
-        try { var v = localStorage.getItem((s ? 'sh:' : '') + k); return v ? { value: v } : null; } catch(e) { return null; }
-      },
-      set: function(k, v, s) {
-        try { localStorage.setItem((s ? 'sh:' : '') + k, v); return { key: k, value: v }; } catch(e) { return null; }
-      },
-      list: function(prefix, s) {
-        try {
-          var p = (s ? 'sh:' : '') + (prefix || '');
-          var keys = Object.keys(localStorage).filter(function(k){ return k.startsWith(p); });
-          return { keys: keys };
-        } catch(e) { return { keys: [] }; }
-      }
+      get: function(k,s){ try{ var v=localStorage.getItem((s?'sh:':'')+k); return v?{value:v}:null; }catch(e){return null;} },
+      set: function(k,v,s){ try{ localStorage.setItem((s?'sh:':'')+k,v); return{key:k,value:v}; }catch(e){return null;} },
+      list: function(prefix,s){ try{ var p=(s?'sh:':'')+(prefix||''); var keys=Object.keys(localStorage).filter(function(k){return k.startsWith(p);}); return{keys:keys}; }catch(e){return{keys:[]};} }
     };
   </script>
 
-  <script type="text/babel" src="app.jsx" data-type="module"></script>
+  <!-- Ladda app.jsx utan data-type="module" så exports-variabeln inte krockar -->
+  <script type="text/babel" src="app.jsx"></script>
 
-  <script type="text/babel" data-type="module">
-    // Small delay to ensure app.jsx is parsed first
-    setTimeout(function() {
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(App));
-    }, 100);
+  <script type="text/babel">
+    var domNode = document.getElementById('root');
+    var root = ReactDOM.createRoot(domNode);
+    root.render(React.createElement(App));
   </script>
 </body>
 </html>
