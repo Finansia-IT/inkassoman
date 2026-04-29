@@ -4,28 +4,54 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Inkasso-Man</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #111; display: flex; justify-content: center; font-family: sans-serif; }
-    --border-radius-md: 8px; --border-radius-lg: 12px;
-    --color-text-primary: #f0f0f0; --color-text-secondary: #aaa;
-    --color-background-secondary: #222; --color-border-secondary: #444;
-    --color-border-primary: #555;
+    body { background: #111; display: flex; justify-content: center; }
+    :root {
+      --border-radius-md: 8px;
+      --border-radius-lg: 12px;
+      --color-text-primary: #f0f0f0;
+      --color-text-secondary: #aaa;
+      --color-background-secondary: #2a2a2a;
+      --color-border-secondary: #444;
+      --color-border-primary: #555;
+      --font-sans: sans-serif;
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" src="app.jsx"></script>
+
   <script>
-    // Shim for window.storage using localStorage
+    // Storage shim using localStorage
     window.storage = {
-      get: (k,s) => { try { const v=localStorage.getItem((s?'sh:':'')+k); return v?{value:v}:null; } catch{ return null; } },
-      set: (k,v,s) => { try { localStorage.setItem((s?'sh:':'')+k,v); return {key:k,value:v}; } catch{ return null; } },
-      list: (prefix,s) => { try { const p=(s?'sh:':'')+prefix; const keys=Object.keys(localStorage).filter(k=>k.startsWith(p)).map(k=>k.replace(s?'sh:':'','')); return {keys}; } catch{ return {keys:[]}; } }
+      get: function(k, s) {
+        try { var v = localStorage.getItem((s ? 'sh:' : '') + k); return v ? { value: v } : null; } catch(e) { return null; }
+      },
+      set: function(k, v, s) {
+        try { localStorage.setItem((s ? 'sh:' : '') + k, v); return { key: k, value: v }; } catch(e) { return null; }
+      },
+      list: function(prefix, s) {
+        try {
+          var p = (s ? 'sh:' : '') + (prefix || '');
+          var keys = Object.keys(localStorage).filter(function(k){ return k.startsWith(p); });
+          return { keys: keys };
+        } catch(e) { return { keys: [] }; }
+      }
     };
+  </script>
+
+  <script type="text/babel" src="app.jsx" data-type="module"></script>
+
+  <script type="text/babel" data-type="module">
+    // Small delay to ensure app.jsx is parsed first
+    setTimeout(function() {
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(App));
+    }, 100);
   </script>
 </body>
 </html>
