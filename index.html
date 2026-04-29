@@ -22,9 +22,19 @@
 <div id="root"></div>
 <script>
   window.storage = {
-    get: function(k,s){ try{ var v=localStorage.getItem((s?'sh:':'')+k); return v?{value:v}:null; }catch(e){return null;} },
-    set: function(k,v,s){ try{ localStorage.setItem((s?'sh:':'')+k,v); return{key:k,value:v}; }catch(e){return null;} },
-    list: function(prefix,s){ try{ var p=(s?'sh:':'')+(prefix||''); var keys=Object.keys(localStorage).filter(function(k){return k.startsWith(p);}); return{keys:keys}; }catch(e){return{keys:[]};} }
+    get: async function(k,s){
+      try{ var v=localStorage.getItem(k); return v?{value:v}:null; }catch(e){return null;}
+    },
+    set: async function(k,v,s){
+      try{ localStorage.setItem(k,v); return{key:k,value:v}; }catch(e){return null;}
+    },
+    list: async function(prefix,s){
+      try{
+        var p=prefix||'';
+        var keys=Object.keys(localStorage).filter(function(k){return k.startsWith(p);});
+        return{keys:keys};
+      }catch(e){return{keys:[]};}
+    }
   };
 </script>
 <script type="text/babel">
@@ -49,9 +59,9 @@ function App(){
   const canvasRef=useRef(null),stateRef=useRef(null),rafRef=useRef(null),timerRef=useRef(null),lastRef=useRef(0),nextDirRef=useRef({dr:0,dc:0}),currentDirRef=useRef({dr:0,dc:0}),popupsRef=useRef([]),typingRef=useRef(false),charRef=useRef('pahlsson');
   const [phase,setPhase]=useState("start"),[selectedChar,setSelectedChar]=useState('pahlsson'),[score,setScore]=useState(0),[caught,setCaught]=useState(0),[timeLeft,setTimeLeft]=useState(60),[finalScore,setFinalScore]=useState(0),[finalCaught,setFinalCaught]=useState(0),[finalBreakdown,setFinalBreakdown]=useState([0,0,0,0]),[playerName,setPlayerName]=useState(""),[nameInput,setNameInput]=useState(""),[scoreboard,setScoreboard]=useState([]),[sbLoading,setSbLoading]=useState(false),[saved,setSaved]=useState(false);
 
-  const loadScoreboard=useCallback(async()=>{setSbLoading(true);try{const res=await window.storage.list("inkasso:score:");const entries=[];for(const key of (res?.keys||[])){try{const r2=await window.storage.get(key,true);if(r2)entries.push(JSON.parse(r2.value));}catch{}}entries.sort((a,b)=>b.score-a.score);setScoreboard(entries.slice(0,10));}catch(e){console.error(e);}setSbLoading(false);},[]);
+  const loadScoreboard=useCallback(async()=>{setSbLoading(true);try{const res=await window.storage.list("inkasso:score:");const entries=[];for(const key of (res?.keys||[])){try{const r2=await window.storage.get(key);if(r2)entries.push(JSON.parse(r2.value));}catch{}}entries.sort((a,b)=>b.score-a.score);setScoreboard(entries.slice(0,10));}catch(e){console.error(e);}setSbLoading(false);},[]);
   useEffect(()=>{loadScoreboard();},[]);
-  const saveScore=useCallback(async(name,sc,bd,ct,char)=>{const key=`inkasso:score:${Date.now()}-${Math.random().toString(36).slice(2,7)}`;const entry={name,score:sc,breakdown:bd,caught:ct,char,date:new Date().toLocaleDateString("sv-SE")};try{await window.storage.set(key,JSON.stringify(entry),true);}catch{}setSaved(true);loadScoreboard();},[]);
+  const saveScore=useCallback(async(name,sc,bd,ct,char)=>{const key=`inkasso:score:${Date.now()}-${Math.random().toString(36).slice(2,7)}`;const entry={name,score:sc,breakdown:bd,caught:ct,char,date:new Date().toLocaleDateString("sv-SE")};try{await window.storage.set(key,JSON.stringify(entry));}catch(e){console.error(e);}setSaved(true);loadScoreboard();},[]);
   const initState=useCallback(()=>{const dots=[];for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(MAP_TEMPLATE[r][c]===0)dots.push({r,c,active:true});const customers=CUSTOMER_STARTS.map((s,i)=>({r:s.r,c:s.c,px:s.c*TILE+TILE/2,py:s.r*TILE+TILE/2,baseSpeed:BASE_SPEEDS[i],dr:0,dc:1,name:NAMES[i],stage:0}));stateRef.current={player:{r:5,c:6,px:6*TILE+TILE/2,py:5*TILE+TILE/2,dr:0,dc:0},customers,dots,score:0,caught:0,timeLeft:60,breakdown:[0,0,0,0]};nextDirRef.current={dr:0,dc:0};currentDirRef.current={dr:0,dc:0};popupsRef.current=[];},[]);
   const endGame=useCallback(()=>{cancelAnimationFrame(rafRef.current);clearInterval(timerRef.current);const s=stateRef.current;setFinalScore(s.score);setFinalCaught(s.caught);setFinalBreakdown([...s.breakdown]);setSaved(false);setNameInput(playerName||"");setPhase("end");},[playerName]);
   const startGame=useCallback((charId)=>{charRef.current=charId||charRef.current;initState();setScore(0);setCaught(0);setTimeLeft(60);setPhase("playing");},[initState]);
@@ -65,48 +75,4 @@ function App(){
     const char=CHARACTERS.find(c=>c.id===charRef.current)||CHARACTERS[0];
     function moveCustomer(cu,dt){const spd=cu.baseSpeed*STAGES[cu.stage].speedMult,targetX=cu.c*TILE+TILE/2,targetY=cu.r*TILE+TILE/2,dx=targetX-cu.px,dy=targetY-cu.py,dist=Math.sqrt(dx*dx+dy*dy),step=spd*TILE*dt;if(dist>step){const nx=cu.px+(dx/dist)*step,ny=cu.py+(dy/dist)*step;if(!isWall(Math.floor(ny/TILE),Math.floor(nx/TILE))){cu.px=nx;cu.py=ny;}}else{cu.px=targetX;cu.py=targetY;const dirs=[[-1,0],[1,0],[0,-1],[0,1]],fwd=dirs.filter(([dr,dc])=>dr===cu.dr&&dc===cu.dc&&!isWall(cu.r+dr,cu.c+dc)),turn=dirs.filter(([dr,dc])=>!(dr===cu.dr&&dc===cu.dc)&&!(dr===-cu.dr&&dc===-cu.dc)&&!isWall(cu.r+dr,cu.c+dc)),rev=dirs.filter(([dr,dc])=>dr===-cu.dr&&dc===-cu.dc&&!isWall(cu.r+dr,cu.c+dc)),rnd=Math.random();let pool=fwd.length&&rnd<0.55?fwd:turn.length&&rnd<0.95?turn:fwd.length?fwd:turn.length?turn:rev;if(pool&&pool.length){const d=pool[Math.floor(Math.random()*pool.length)];cu.dr=d[0];cu.dc=d[1];}const nr=cu.r+cu.dr,nc=cu.c+cu.dc;if(!isWall(nr,nc)){cu.r=nr;cu.c=nc;cu.px=targetX+cu.dc*step;cu.py=targetY+cu.dr*step;}}}
     function respawn(cu){const p=stateRef.current.player,spots=CUSTOMER_STARTS.filter(s=>Math.abs(s.r-p.r)+Math.abs(s.c-p.c)>4),s=spots[Math.floor(Math.random()*spots.length)]||CUSTOMER_STARTS[3];cu.r=s.r;cu.c=s.c;cu.px=s.c*TILE+TILE/2;cu.py=s.r*TILE+TILE/2;}
-    function drawCustomer(cu){const st=STAGES[cu.stage],{px:x,py:y}=cu;ctx.save();ctx.translate(x,y);if(cu.stage>=2){ctx.beginPath();ctx.arc(0,0,TILE*0.42,0,Math.PI*2);ctx.strokeStyle=cu.stage===3?'#ce93d8':'#ef9a9a';ctx.lineWidth=2.5;ctx.stroke();}ctx.beginPath();ctx.arc(0,0,TILE*0.34,0,Math.PI*2);ctx.fillStyle=st.color;ctx.fill();const es=cu.stage*1.5;ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.arc(-4+es*0.3,-3-es*0.2,2+es*0.2,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(4-es*0.3,-3-es*0.2,2+es*0.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.lineWidth=1.5;if(cu.stage<=1){ctx.beginPath();ctx.arc(0,5,4,0.2,Math.PI-0.2);ctx.stroke();}else{ctx.beginPath();ctx.arc(0,8,5,Math.PI+0.3,Math.PI*2-0.3);ctx.stroke();}ctx.fillStyle=st.color;ctx.fillRect(-14,7,28,10);ctx.fillStyle=st.textColor;ctx.font=`bold ${cu.stage===2?5.5:6}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(st.emoji+' '+st.name,-0.5,12);for(let i=0;i<=cu.stage;i++){ctx.fillStyle=cu.stage===3?'#ce93d8':cu.stage===2?'#ef5350':cu.stage===1?'#ffb74d':'#81c784';ctx.fillRect(-14+i*7,19,5,3);}ctx.restore();ctx.fillStyle='#bbb';ctx.font='8px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(cu.name,x,y+TILE*0.44);}
-    let mouthDir=1,mouthA=0;
-    function loop(ts=0){const dt=Math.min((ts-lastRef.current)/1000,0.05);lastRef.current=ts;const st2=stateRef.current;if(!st2)return;const{player:p,customers,dots}=st2;const nd=nextDirRef.current,cd=currentDirRef.current;if(nd.dr!==cd.dr||nd.dc!==cd.dc){const cx=p.c*TILE+TILE/2,cy=p.r*TILE+TILE/2;if(Math.sqrt((p.px-cx)**2+(p.py-cy)**2)<6&&!isWall(p.r+nd.dr,p.c+nd.dc)){p.dr=nd.dr;p.dc=nd.dc;currentDirRef.current={...nd};}}if(!isWall(p.r+p.dr,p.c+p.dc)){p.px+=p.dc*3.8*TILE*dt;p.py+=p.dr*3.8*TILE*dt;}else{p.px=p.c*TILE+TILE/2;p.py=p.r*TILE+TILE/2;p.dr=0;p.dc=0;currentDirRef.current={dr:0,dc:0};}const cr=Math.round((p.py-TILE/2)/TILE),cc=Math.round((p.px-TILE/2)/TILE);if(!isWall(cr,cc)){p.r=cr;p.c=cc;}mouthA+=mouthDir*180*dt;if(mouthA>30)mouthDir=-1;if(mouthA<2)mouthDir=1;dots.forEach(d=>{if(d.active&&d.r===p.r&&d.c===p.c){d.active=false;st2.score+=5;setScore(st2.score);}});customers.forEach(cu=>{moveCustomer(cu,dt);const dx=cu.px-p.px,dy=cu.py-p.py;if(Math.sqrt(dx*dx+dy*dy)<TILE*0.6){const stage=STAGES[cu.stage];st2.score+=stage.points;st2.caught++;st2.breakdown[cu.stage]++;setScore(st2.score);setCaught(st2.caught);popupsRef.current.push({x:cu.px,y:cu.py,text:`+${stage.points} ${stage.emoji}`,color:stage.color,life:1.2});cu.stage=Math.min(cu.stage+1,3);respawn(cu);}});popupsRef.current=popupsRef.current.filter(pp=>pp.life>0);popupsRef.current.forEach(pp=>{pp.life-=dt;pp.y-=35*dt;});ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,canvas.width,canvas.height);for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){if(MAP_TEMPLATE[row][col]===1){ctx.fillStyle='#2a2a5a';ctx.fillRect(col*TILE,row*TILE,TILE,TILE);ctx.strokeStyle='#3a3a8a';ctx.lineWidth=0.5;ctx.strokeRect(col*TILE+0.5,row*TILE+0.5,TILE-1,TILE-1);}}dots.forEach(d=>{if(!d.active)return;ctx.fillStyle='#ffd700';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('kr',d.c*TILE+TILE/2,d.r*TILE+TILE/2);});customers.forEach(cu=>drawCustomer(cu));char.draw(ctx,p.px,p.py,TILE*0.44);ctx.fillStyle=char.ring;ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(char.name,p.px,p.py+TILE*0.47);popupsRef.current.forEach(pp=>{ctx.globalAlpha=Math.max(0,pp.life);ctx.fillStyle=pp.color;ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(pp.text,pp.x,pp.y);ctx.globalAlpha=1;});rafRef.current=requestAnimationFrame(loop);}
-    lastRef.current=0;rafRef.current=requestAnimationFrame(loop);
-    return()=>cancelAnimationFrame(rafRef.current);
-  },[phase]);
-
-  const handleDpad=(dr,dc)=>{nextDirRef.current={dr,dc};};
-  const handleSave=()=>{const n=nameInput.trim()||"Anonym";setPlayerName(n);saveScore(n,finalScore,finalBreakdown,finalCaught,charRef.current);};
-  const btnStyle={padding:'8px 20px',border:'1px solid rgba(255,255,255,0.4)',background:'transparent',color:'#fff',borderRadius:8,fontSize:14,cursor:'pointer'};
-
-  return(
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'1rem 0',fontFamily:'sans-serif'}}>
-      <div style={{display:'flex',gap:'1.5rem',marginBottom:'0.5rem',fontSize:14,color:'#f0f0f0',fontWeight:500}}>
-        <div>Poäng: <span style={{fontWeight:400,color:'#aaa'}}>{score}</span></div>
-        <div>Infångade: <span style={{fontWeight:400,color:'#aaa'}}>{caught}</span></div>
-        <div>Tid: <span style={{fontWeight:400,color:'#aaa'}}>{timeLeft}</span>s</div>
-      </div>
-      <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap',justifyContent:'center'}}>
-        {STAGES.map((s,i)=><div key={i} style={{background:s.color,color:s.textColor,fontSize:10,fontWeight:500,padding:'2px 7px',borderRadius:6}}>{s.emoji} {s.name} +{s.points}p</div>)}
-      </div>
-      <div style={{position:'relative'}}>
-        <canvas ref={canvasRef} width={COLS*TILE} height={ROWS*TILE} style={{border:'1px solid #555',borderRadius:8,background:'#1a1a2e',display:'block'}}/>
-        {phase==='start'&&<Overlay><div style={{fontSize:22,fontWeight:500}}>💼 INKASSO-MAN</div><div style={{fontSize:13,opacity:0.8}}>Indrivning med Påhlsson</div><div style={{fontSize:11,opacity:0.65,lineHeight:1.9}}>{STAGES.map((s,i)=><div key={i}>{s.emoji} {s.name} = {s.points}p | x{s.speedMult} hastighet</div>)}</div><button style={btnStyle} onClick={()=>setPhase('pick')}>Välj spelare ▶</button><div style={{marginTop:4,fontSize:12,opacity:0.6,cursor:'pointer',textDecoration:'underline'}} onClick={()=>setPhase('scores')}>Se scoreboard 🏆</div></Overlay>}
-        {phase==='pick'&&<Overlay><div style={{fontSize:18,fontWeight:500}}>Välj din spelare</div><div style={{display:'flex',gap:16,marginTop:4}}>{CHARACTERS.map(ch=><div key={ch.id} onClick={()=>setSelectedChar(ch.id)} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:'12px 16px',border:`2px solid ${selectedChar===ch.id?ch.ring:'rgba(255,255,255,0.2)'}`,borderRadius:12,cursor:'pointer',background:selectedChar===ch.id?'rgba(255,255,255,0.1)':'transparent'}}><AvatarPreview drawFn={ch.draw} size={80}/><div style={{fontSize:14,fontWeight:500}}>{ch.name}</div><div style={{fontSize:11,opacity:0.65}}>{ch.title}</div></div>)}</div><button style={{...btnStyle,marginTop:8}} onClick={()=>startGame(selectedChar)}>Starta spelet 🎮</button><div style={{fontSize:12,opacity:0.5,cursor:'pointer',marginTop:4}} onClick={()=>setPhase('start')}>← Tillbaka</div></Overlay>}
-        {phase==='end'&&<Overlay><div style={{fontSize:20,fontWeight:500}}>Tid ute!</div><div style={{fontSize:22,fontWeight:500,color:'#ffd700'}}>Poäng: {finalScore}</div><div style={{fontSize:12,lineHeight:1.9,opacity:0.85}}>{STAGES.map((s,i)=><div key={i}>{s.emoji} {s.name}: <b>{finalBreakdown[i]}</b> st (+{finalBreakdown[i]*s.points}p)</div>)}</div>{!saved?<div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,marginTop:4}}><div style={{fontSize:12,opacity:0.75}}>Ange ditt namn för scoreboard:</div><input value={nameInput} onChange={e=>setNameInput(e.target.value)} onFocus={()=>{typingRef.current=true;}} onBlur={()=>{typingRef.current=false;}} onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')handleSave();}} placeholder="Ditt namn..." maxLength={20} autoFocus style={{padding:'6px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,0.3)',background:'rgba(255,255,255,0.1)',color:'#fff',fontSize:14,textAlign:'center',width:160,outline:'none'}}/><div style={{display:'flex',gap:8}}><button style={btnStyle} onClick={handleSave}>Spara 🏆</button><button style={{...btnStyle,opacity:0.6}} onClick={()=>setPhase('pick')}>Skippa</button></div></div>:<div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8}}><div style={{fontSize:13,color:'#81c784'}}>✅ Sparat!</div><div style={{display:'flex',gap:8}}><button style={btnStyle} onClick={()=>setPhase('pick')}>Spela igen</button><button style={{...btnStyle,opacity:0.8}} onClick={()=>setPhase('scores')}>Se scoreboard 🏆</button></div></div>}</Overlay>}
-        {phase==='scores'&&<Overlay><div style={{fontSize:20,fontWeight:500}}>🏆 Scoreboard</div>{sbLoading?<div style={{opacity:0.6,fontSize:13}}>Laddar...</div>:<div style={{width:'100%',maxWidth:360,maxHeight:260,overflowY:'auto'}}>{scoreboard.length===0&&<div style={{opacity:0.6,fontSize:13}}>Inga resultat än!</div>}{scoreboard.map((e,i)=>{const ch=CHARACTERS.find(c=>c.id===e.char);return<div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 8px',borderRadius:8,background:i===0?'rgba(255,215,0,0.15)':i<3?'rgba(255,255,255,0.07)':'transparent',marginBottom:3}}><span style={{fontSize:16,minWidth:24}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`}</span>{ch&&<AvatarPreview drawFn={ch.draw} size={28}/>}<span style={{flex:1,fontSize:13,fontWeight:500}}>{e.name}</span><span style={{fontSize:14,fontWeight:500,color:'#ffd700'}}>{e.score}p</span><span style={{fontSize:10,opacity:0.5}}>{e.date}</span></div>})}</div>}<div style={{display:'flex',gap:8,marginTop:4}}><button style={btnStyle} onClick={()=>setPhase('pick')}>Spela 🎮</button><button style={{...btnStyle,opacity:0.6,fontSize:13}} onClick={loadScoreboard}>Uppdatera</button></div></Overlay>}
-      </div>
-      <div style={{marginTop:10,display:'grid',gridTemplateColumns:'40px 40px 40px',gridTemplateRows:'40px 40px',gap:4}}>
-        <div/><DpadBtn label="▲" onClick={()=>handleDpad(-1,0)}/><div/>
-        <DpadBtn label="◄" onClick={()=>handleDpad(0,-1)}/>
-        <DpadBtn label="▼" onClick={()=>handleDpad(1,0)}/>
-        <DpadBtn label="►" onClick={()=>handleDpad(0,1)}/>
-      </div>
-    </div>
-  );
-}
-
-function Overlay({children}){return<div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,20,0.9)',borderRadius:8,color:'#fff',textAlign:'center',gap:10,padding:'1rem'}}>{children}</div>;}
-function DpadBtn({label,onClick}){return<button onMouseDown={onClick} onTouchStart={e=>{e.preventDefault();onClick();}} style={{background:'#2a2a2a',border:'1px solid #444',borderRadius:8,fontSize:16,cursor:'pointer',color:'#f0f0f0',display:'flex',alignItems:'center',justifyContent:'center'}}>{label}</button>;}
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
-</body>
-</html>
+    function drawCustomer(cu){const st=STAGES[cu.stage],{px:x,py:y}=cu;ctx.save();ctx.translate(x,y);if(cu.stage>=2){ctx.beginPath();ctx.arc(0,0,TILE*0.42,0,Math.PI*2);ctx.strokeStyle=cu.stage===3?'#ce93d8':'#ef9a9a';ctx.lineWidth=2.5;ctx.stroke();}ctx.beginPath();ctx.arc(0,0,TILE*0.34,0,Math.PI*2);ctx.fillStyle=st.color;ctx.fill();const es=cu.stage*1.5;ctx.fillStyle='rgb
