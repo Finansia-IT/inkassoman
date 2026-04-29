@@ -11,35 +11,40 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #111; display: flex; justify-content: center; }
     :root {
-      --border-radius-md: 8px;
-      --border-radius-lg: 12px;
-      --color-text-primary: #f0f0f0;
-      --color-text-secondary: #aaa;
-      --color-background-secondary: #2a2a2a;
-      --color-border-secondary: #444;
-      --color-border-primary: #555;
-      --font-sans: sans-serif;
+      --border-radius-md: 8px; --border-radius-lg: 12px;
+      --color-text-primary: #f0f0f0; --color-text-secondary: #aaa;
+      --color-background-secondary: #2a2a2a; --color-border-secondary: #444;
+      --color-border-primary: #555; --font-sans: sans-serif;
     }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
+<script>
+  window.storage = {
+    get: function(k,s){ try{ var v=localStorage.getItem((s?'sh:':'')+k); return v?{value:v}:null; }catch(e){return null;} },
+    set: function(k,v,s){ try{ localStorage.setItem((s?'sh:':'')+k,v); return{key:k,value:v}; }catch(e){return null;} },
+    list: function(prefix,s){ try{ var p=(s?'sh:':'')+(prefix||''); var keys=Object.keys(localStorage).filter(function(k){return k.startsWith(p);}); return{keys:keys}; }catch(e){return{keys:[]};} }
+  };
+</script>
+<script type="text/babel">
+const { useEffect, useRef, useState, useCallback } = React;
+const TILE=40,COLS=14,ROWS=12;
+const MAP_TEMPLATE=[[1,1,1,1,1,1,1,1,1,1,1,1,1,1],[1,0,0,0,0,0,1,1,0,0,0,0,0,1],[1,0,1,1,0,0,0,0,0,0,1,1,0,1],[1,0,1,0,0,1,0,0,1,0,0,1,0,1],[1,0,0,0,1,0,0,0,0,1,0,0,0,1],[1,0,1,0,0,0,0,0,0,0,0,1,0,1],[1,0,1,0,0,0,0,0,0,0,0,1,0,1],[1,0,0,0,1,0,0,0,0,1,0,0,0,1],[1,0,1,0,0,1,0,0,1,0,0,1,0,1],[1,0,1,1,0,0,0,0,0,0,1,1,0,1],[1,0,0,0,0,0,1,1,0,0,0,0,0,1],[1,1,1,1,1,1,1,1,1,1,1,1,1,1]];
+const STAGES=[{name:"Påminnelse",color:"#81c784",textColor:"#1b5e20",points:10,emoji:"📧",speedMult:1.0},{name:"Inkassokrav",color:"#ffb74d",textColor:"#e65100",points:25,emoji:"📄",speedMult:1.5},{name:"Betalningsförelägg.",color:"#ef5350",textColor:"#7f0000",points:50,emoji:"⚖️",speedMult:2.2},{name:"Kronofogden",color:"#7e57c2",textColor:"#1a0050",points:100,emoji:"🔨",speedMult:3.2}];
+const BASE_SPEEDS=[1.2,1.6,1.4,1.3,1.5,1.1,1.7];
+const NAMES=["Svensson","Lindqvist","Magnusson","Persson","Johansson","Karlsson","Nilsson"];
+const CUSTOMER_STARTS=[{r:1,c:1},{r:1,c:8},{r:10,c:1},{r:10,c:8},{r:1,c:12},{r:3,c:6},{r:8,c:6}];
+function isWall(r,c){if(r<0||r>=ROWS||c<0||c>=COLS)return true;return MAP_TEMPLATE[r][c]===1;}
 
-  <script>
-    window.storage = {
-      get: function(k,s){ try{ var v=localStorage.getItem((s?'sh:':'')+k); return v?{value:v}:null; }catch(e){return null;} },
-      set: function(k,v,s){ try{ localStorage.setItem((s?'sh:':'')+k,v); return{key:k,value:v}; }catch(e){return null;} },
-      list: function(prefix,s){ try{ var p=(s?'sh:':'')+(prefix||''); var keys=Object.keys(localStorage).filter(function(k){return k.startsWith(p);}); return{keys:keys}; }catch(e){return{keys:[]};} }
-    };
-  </script>
+function drawPahlsson(ctx,x,y,radius){const r=radius;ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.clip();ctx.fillStyle='#f0c9a0';ctx.beginPath();ctx.arc(x,y+r*0.05,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e8b888';ctx.fillRect(x-r*0.28,y+r*0.54,r*0.56,r*0.52);ctx.fillStyle='#2c2c2e';ctx.beginPath();ctx.moveTo(x-r*1.1,y+r*1.1);ctx.lineTo(x-r*0.48,y+r*0.58);ctx.lineTo(x-r*0.18,y+r*0.7);ctx.lineTo(x,y+r*0.6);ctx.lineTo(x+r*0.18,y+r*0.7);ctx.lineTo(x+r*0.48,y+r*0.58);ctx.lineTo(x+r*1.1,y+r*1.1);ctx.fill();ctx.fillStyle='#a8c8e8';ctx.beginPath();ctx.moveTo(x-r*0.18,y+r*0.7);ctx.lineTo(x,y+r*0.6);ctx.lineTo(x+r*0.18,y+r*0.7);ctx.lineTo(x+r*0.13,y+r*1.1);ctx.lineTo(x-r*0.13,y+r*1.1);ctx.fill();ctx.strokeStyle='#c5dff5';ctx.lineWidth=r*0.022;for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(x+i*r*0.055,y+r*0.68);ctx.lineTo(x+i*r*0.055,y+r*1.1);ctx.stroke();}ctx.fillStyle='#d8eaf8';ctx.beginPath();ctx.moveTo(x,y+r*0.62);ctx.lineTo(x-r*0.25,y+r*0.53);ctx.lineTo(x-r*0.14,y+r*0.73);ctx.fill();ctx.beginPath();ctx.moveTo(x,y+r*0.62);ctx.lineTo(x+r*0.25,y+r*0.53);ctx.lineTo(x+r*0.14,y+r*0.73);ctx.fill();ctx.fillStyle='#cc2200';ctx.beginPath();ctx.moveTo(x-r*0.075,y+r*0.7);ctx.lineTo(x+r*0.075,y+r*0.7);ctx.lineTo(x+r*0.052,y+r*0.93);ctx.lineTo(x,y+r*1.03);ctx.lineTo(x-r*0.052,y+r*0.93);ctx.fill();ctx.fillStyle='#aa1a00';ctx.beginPath();ctx.ellipse(x,y+r*0.7,r*0.075,r*0.05,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(180,215,255,0.5)';[[0,0.76],[-0.028,0.82],[0.028,0.82],[0,0.88]].forEach(([dx,dy])=>{ctx.beginPath();ctx.arc(x+dx*r,y+dy*r,r*0.017,0,Math.PI*2);ctx.fill();});ctx.fillStyle='#e0a870';ctx.beginPath();ctx.ellipse(x-r*0.87,y+r*0.05,r*0.15,r*0.21,0.15,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.87,y+r*0.05,r*0.15,r*0.21,-0.15,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3d2510';ctx.beginPath();ctx.ellipse(x,y-r*0.5,r*0.76,r*0.44,0,Math.PI,0);ctx.fill();ctx.beginPath();ctx.ellipse(x-r*0.66,y-r*0.26,r*0.3,r*0.36,0.28,Math.PI,0);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.66,y-r*0.26,r*0.3,r*0.36,-0.28,Math.PI,0);ctx.fill();ctx.fillStyle='#f0c9a0';ctx.beginPath();ctx.ellipse(x-r*0.5,y-r*0.6,r*0.2,r*0.11,0.5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.5,y-r*0.6,r*0.2,r*0.11,-0.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#5a3818';ctx.lineWidth=r*0.078;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-r*0.44,y-r*0.24);ctx.quadraticCurveTo(x-r*0.27,y-r*0.32,x-r*0.11,y-r*0.26);ctx.stroke();ctx.beginPath();ctx.moveTo(x+r*0.11,y-r*0.26);ctx.quadraticCurveTo(x+r*0.27,y-r*0.32,x+r*0.44,y-r*0.24);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.ellipse(x-r*0.26,y-r*0.1,r*0.135,r*0.09,0,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.26,y-r*0.1,r*0.135,r*0.09,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3a1e08';ctx.beginPath();ctx.arc(x-r*0.26,y-r*0.1,r*0.072,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.26,y-r*0.1,r*0.072,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,255,255,0.75)';ctx.beginPath();ctx.arc(x-r*0.235,y-r*0.125,r*0.025,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.285,y-r*0.125,r*0.025,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d49060';ctx.beginPath();ctx.arc(x,y+r*0.08,r*0.085,0,Math.PI*2);ctx.fill();ctx.fillStyle='#bf7a48';ctx.beginPath();ctx.arc(x-r*0.1,y+r*0.1,r*0.052,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.1,y+r*0.1,r*0.052,0,Math.PI*2);ctx.fill();ctx.fillStyle='#b85030';ctx.beginPath();ctx.arc(x,y+r*0.29,r*0.34,0.18,Math.PI-0.18);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y+r*0.29,r*0.27,0.28,Math.PI-0.28);ctx.fill();ctx.strokeStyle='#b05030';ctx.lineWidth=r*0.038;ctx.beginPath();ctx.moveTo(x-r*0.25,y+r*0.29);ctx.lineTo(x+r*0.25,y+r*0.29);ctx.stroke();ctx.fillStyle='rgba(210,90,70,0.16)';ctx.beginPath();ctx.ellipse(x-r*0.42,y+r*0.2,r*0.19,r*0.11,0,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.42,y+r*0.2,r*0.19,r*0.11,0,0,Math.PI*2);ctx.fill();ctx.restore();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.strokeStyle='#4fc3f7';ctx.lineWidth=2.5;ctx.stroke();}
 
-  <!-- Ladda app.jsx utan data-type="module" så exports-variabeln inte krockar -->
-  <script type="text/babel" src="app.jsx"></script>
+function drawPavle(ctx,x,y,radius){const r=radius;ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.clip();ctx.fillStyle='#e0b896';ctx.beginPath();ctx.arc(x,y+r*0.05,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#d4a880';ctx.fillRect(x-r*0.24,y+r*0.52,r*0.48,r*0.55);ctx.fillStyle='#222';ctx.beginPath();ctx.moveTo(x-r*1.1,y+r*1.1);ctx.lineTo(x-r*0.46,y+r*0.56);ctx.lineTo(x,y+r*0.62);ctx.lineTo(x+r*0.46,y+r*0.56);ctx.lineTo(x+r*1.1,y+r*1.1);ctx.fill();ctx.fillStyle='#7a8070';ctx.beginPath();ctx.moveTo(x-r*1.1,y+r*1.1);ctx.lineTo(x-r*0.46,y+r*0.56);ctx.lineTo(x-r*0.14,y+r*0.68);ctx.lineTo(x-r*0.06,y+r*1.1);ctx.lineTo(x-r*1.1,y+r*1.1);ctx.fill();ctx.beginPath();ctx.moveTo(x+r*1.1,y+r*1.1);ctx.lineTo(x+r*0.46,y+r*0.56);ctx.lineTo(x+r*0.14,y+r*0.68);ctx.lineTo(x+r*0.06,y+r*1.1);ctx.lineTo(x+r*1.1,y+r*1.1);ctx.fill();ctx.strokeStyle='#bbb';ctx.lineWidth=r*0.04;ctx.beginPath();ctx.moveTo(x,y+r*0.62);ctx.lineTo(x,y+r*1.1);ctx.stroke();ctx.fillStyle='#ccc';ctx.fillRect(x-r*0.04,y+r*0.7,r*0.08,r*0.06);ctx.strokeStyle='rgba(100,105,90,0.5)';ctx.lineWidth=r*0.02;[[-0.5,0.75],[0.5,0.75],[-0.55,0.88],[0.55,0.88]].forEach(([dx,dy])=>{ctx.beginPath();ctx.moveTo(x+dx*r,y+(dy-0.04)*r);ctx.lineTo(x+(dx+0.06)*r,y+dy*r);ctx.lineTo(x+dx*r,y+(dy+0.04)*r);ctx.lineTo(x+(dx-0.06)*r,y+dy*r);ctx.closePath();ctx.stroke();});ctx.strokeStyle='rgba(200,200,200,0.7)';ctx.lineWidth=r*0.018;ctx.beginPath();ctx.arc(x,y+r*0.72,r*0.18,0.3,Math.PI-0.3);ctx.stroke();ctx.fillStyle='#c8956a';ctx.beginPath();ctx.ellipse(x-r*0.86,y+r*0.04,r*0.14,r*0.2,0.15,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.86,y+r*0.04,r*0.14,r*0.2,-0.15,0,Math.PI*2);ctx.fill();ctx.fillStyle='#2a1f14';ctx.beginPath();ctx.arc(x,y-r*0.56,r*0.55,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x-r*0.4,y-r*0.48,r*0.38,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.4,y-r*0.48,r*0.38,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x-r*0.62,y-r*0.3,r*0.3,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.62,y-r*0.3,r*0.3,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x-r*0.22,y-r*0.72,r*0.28,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.22,y-r*0.72,r*0.28,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3d2c1a';ctx.beginPath();ctx.arc(x+r*0.15,y-r*0.6,r*0.2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#2e2018';ctx.beginPath();ctx.ellipse(x,y+r*0.38,r*0.46,r*0.28,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3a2a1c';ctx.beginPath();ctx.ellipse(x,y+r*0.32,r*0.36,r*0.16,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#251a10';ctx.beginPath();ctx.ellipse(x,y+r*0.18,r*0.22,r*0.08,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#201408';ctx.lineWidth=r*0.085;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-r*0.42,y-r*0.22);ctx.quadraticCurveTo(x-r*0.25,y-r*0.3,x-r*0.1,y-r*0.23);ctx.stroke();ctx.beginPath();ctx.moveTo(x+r*0.1,y-r*0.23);ctx.quadraticCurveTo(x+r*0.25,y-r*0.3,x+r*0.42,y-r*0.22);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.ellipse(x-r*0.25,y-r*0.1,r*0.13,r*0.088,0,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(x+r*0.25,y-r*0.1,r*0.13,r*0.088,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#2a1a08';ctx.beginPath();ctx.arc(x-r*0.25,y-r*0.1,r*0.068,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.25,y-r*0.1,r*0.068,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,255,255,0.7)';ctx.beginPath();ctx.arc(x-r*0.225,y-r*0.122,r*0.022,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x+r*0.275,y-r*0.122,r*0.022,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#6b4a28';ctx.lineWidth=r*0.055;ctx.lineCap='round';ctx.beginPath();ctx.arc(x-r*0.26,y-r*0.1,r*0.175,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(x+r*0.26,y-r*0.1,r*0.175,0,Math.PI*2);ctx.stroke();ctx.lineWidth=r*0.04;ctx.beginPath();ctx.moveTo(x-r*0.085,y-r*0.1);ctx.lineTo(x+r*0.085,y-r*0.1);ctx.stroke();ctx.beginPath();ctx.moveTo(x-r*0.435,y-r*0.1);ctx.lineTo(x-r*0.72,y-r*0.06);ctx.stroke();ctx.beginPath();ctx.moveTo(x+r*0.435,y-r*0.1);ctx.lineTo(x+r*0.72,y-r*0.06);ctx.stroke();ctx.fillStyle='#c08060';ctx.beginPath();ctx.arc(x,y+r*0.06,r*0.07,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#7a3a20';ctx.lineWidth=r*0.055;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-r*0.16,y+r*0.14);ctx.quadraticCurveTo(x+r*0.05,y+r*0.22,x+r*0.2,y+r*0.16);ctx.stroke();ctx.restore();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.strokeStyle='#a5d6a7';ctx.lineWidth=2.5;ctx.stroke();}
 
-  <script type="text/babel">
-    var domNode = document.getElementById('root');
-    var root = ReactDOM.createRoot(domNode);
-    root.render(React.createElement(App));
-  </script>
-</body>
-</html>
+function AvatarPreview({drawFn,size=80}){const ref=useRef(null);useEffect(()=>{const c=ref.current;if(!c)return;const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);drawFn(ctx,size/2,size/2,size/2-3);},[drawFn,size]);return <canvas ref={ref} width={size} height={size} style={{borderRadius:'50%',display:'block'}}/>;}
+
+const CHARACTERS=[{id:'pahlsson',name:'Påhlsson',title:'Inkassochef',ring:'#4fc3f7',draw:drawPahlsson},{id:'pavle',name:'Pavle',title:'Debt Collection Officer',ring:'#a5d6a7',draw:drawPavle}];
+
+function App(){
+  const canvasRef=useRef(null),stateRef=useRef(null),rafRef=useRef(null),timerRef=useRef(null),lastRef=useRef(0),nextDirRef=useRef({dr:0,dc:0}),currentDirRef=useRef({dr:0,dc:0}),popupsRef=useRef([]),typingRef=useRef(false),charRef=useRef('pahlsson');
+  const [phase,setPhase]=useState("start"),[selectedChar,setSelectedChar]=useState('pahlsson'),[score,setScore]=useState(0),[caught,setCaught]=useState(0),[timeLeft,setTimeLeft]=useState(60),[finalScore,setFinalScore]=useState(0),[finalCaught,setFinalCaught]=useSt
