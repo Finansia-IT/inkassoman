@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Inkasso-Man</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; display: flex; justify-content: center; font-family: sans-serif; }
+    --border-radius-md: 8px; --border-radius-lg: 12px;
+    --color-text-primary: #f0f0f0; --color-text-secondary: #aaa;
+    --color-background-secondary: #222; --color-border-secondary: #444;
+    --color-border-primary: #555;
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="app.jsx"></script>
+  <script>
+    // Shim for window.storage using localStorage
+    window.storage = {
+      get: (k,s) => { try { const v=localStorage.getItem((s?'sh:':'')+k); return v?{value:v}:null; } catch{ return null; } },
+      set: (k,v,s) => { try { localStorage.setItem((s?'sh:':'')+k,v); return {key:k,value:v}; } catch{ return null; } },
+      list: (prefix,s) => { try { const p=(s?'sh:':'')+prefix; const keys=Object.keys(localStorage).filter(k=>k.startsWith(p)).map(k=>k.replace(s?'sh:':'','')); return {keys}; } catch{ return {keys:[]}; } }
+    };
+  </script>
+</body>
+</html>
